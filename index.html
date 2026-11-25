@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="description" content="Calculator: cât te costă un lucru în ore de muncă. Prototip al proiectului Fără Fantome.">
+<title>Prețul în ore</title>
+<style>body{margin:0}</style>
+</head>
+<body>
+<style>
+/* Layout: a single column "pontaj" (time card) — big answer on top, ghost list below. */
+:root{
+  --bg:#EEF1F6; --card:#FFFFFF; --ink:#16203A; --muted:#5B6683; --line:#D6DCE8;
+  --accent:#E39A2D; --accent-ink:#5A3500; --ghost:#7C83A8; --ghost-bg:#E4E6F2; --slot:#E7EBF2;
+  --display:"Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  --body:"Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  --mono:ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F1424; --card:#171E33; --ink:#E9EDF7; --muted:#9AA4C0; --line:#2A3350;
+  --accent:#F0AE4A; --accent-ink:#1A1000; --ghost:#A3A9CC; --ghost-bg:#232A45; --slot:#222A42; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1424; --card:#171E33; --ink:#E9EDF7; --muted:#9AA4C0; --line:#2A3350;
+  --accent:#F0AE4A; --accent-ink:#1A1000; --ghost:#A3A9CC; --ghost-bg:#232A45; --slot:#222A42; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+.wrap{max-width:720px;margin:0 auto;padding-block:28px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:20px}
+header{display:flex;flex-direction:column;gap:6px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+h1{font-family:var(--display);font-weight:800;font-size:clamp(34px,7vw,52px);line-height:1.02;margin:0;text-wrap:balance}
+h1 span{color:var(--accent)}
+.lead{color:var(--muted);margin:0;max-width:60ch}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:16px}
+h2{font-family:var(--display);font-weight:600;font-size:22px;margin:0}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:480px){.fields{grid-template-columns:1fr}}
+label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500;color:var(--muted)}
+input,select{font:inherit;font-family:var(--mono);font-size:18px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%;box-sizing:border-box;min-width:0}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font:inherit;font-size:13px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer}
+.chip:hover{border-color:var(--accent)}
+.answer{display:flex;flex-direction:column;gap:10px;border-top:1px dashed var(--line);padding-top:16px}
+.big{font-family:var(--display);font-weight:800;font-size:clamp(40px,10vw,64px);line-height:1;font-variant-numeric:tabular-nums}
+.big small{font-size:.4em;font-weight:600;color:var(--muted);margin-left:6px}
+.say{margin:0;font-size:16px}
+.say b{color:var(--ink)}
+.punch{display:flex;flex-wrap:wrap;gap:5px}
+.slot{width:22px;height:30px;border-radius:5px;background:var(--slot);position:relative;overflow:hidden}
+.slot i{position:absolute;inset:0;background:var(--accent);transform-origin:bottom}
+.more{font-family:var(--mono);font-size:13px;color:var(--muted);align-self:center;margin-left:4px}
+.legend{font-size:12px;color:var(--muted);font-family:var(--mono)}
+.yearly{background:var(--ghost-bg);border-radius:10px;padding:12px 14px;font-size:14px}
+.yearly[hidden]{display:none}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.tablebox{overflow-x:auto}
+th{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+td{padding:8px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:middle}
+td.num,th.num{text-align:right;font-family:var(--mono);white-space:nowrap}
+.tag{font-size:11px;color:var(--ghost);border:1px solid var(--ghost);border-radius:999px;padding:1px 7px;margin-left:6px}
+.del{font:inherit;background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:4px 8px}
+.del:hover{color:var(--ink)}
+.addrow{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;align-items:end}
+@media (max-width:560px){.addrow{grid-template-columns:1fr 1fr}.addrow .name{grid-column:1/-1}.addrow button{grid-column:1/-1}}
+.addrow input,.addrow select{font-size:15px}
+.btn{font:inherit;font-weight:600;background:var(--accent);color:var(--accent-ink);border:none;border-radius:10px;padding:11px 16px;cursor:pointer}
+.totals{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tot{background:var(--bg);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.tot .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.tot .v{font-family:var(--display);font-weight:800;font-size:28px;font-variant-numeric:tabular-nums}
+.tot .s{font-family:var(--mono);font-size:13px;color:var(--muted)}
+.empty{color:var(--muted);font-size:14px;margin:0}
+footer{font-size:12px;color:var(--muted);text-align:center}
+@media (prefers-reduced-motion:no-preference){.slot i{transition:transform .35s ease}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Fără Fantome · prototip</div>
+    <h1>Cât te costă <span>în ore</span>?</h1>
+    <p class="lead">Leii de pe ecran nu dor. Orele de muncă, da. Scrie un preț și vezi cât timp ar trebui să muncești pentru el.</p>
+  </header>
+
+  <section class="card" aria-labelledby="t1">
+    <h2 id="t1">Calculator</h2>
+    <div class="fields">
+      <label for="price">Preț (lei)
+        <input id="price" type="number" inputmode="decimal" min="0" step="1" value="85">
+      </label>
+      <label for="wage">Câștig pe oră (lei, net)
+        <input id="wage" type="number" inputmode="decimal" min="1" step="0.5" value="17">
+      </label>
+      <label for="freq">Cât de des plătești
+        <select id="freq">
+          <option value="once">O singură dată</option>
+          <option value="week">În fiecare săptămână</option>
+          <option value="month">În fiecare lună (abonament)</option>
+        </select>
+      </label>
+      <label for="item">Ce cumperi (opțional)
+        <input id="item" type="text" value="un skin în joc" style="font-family:var(--body);font-size:16px">
+      </label>
+    </div>
+    <div class="chips" role="group" aria-label="Exemple rapide">
+      <button class="chip" data-n="un skin în joc" data-p="85" data-f="once">Skin în joc · 85</button>
+      <button class="chip" data-n="un bubble tea" data-p="25" data-f="once">Bubble tea · 25</button>
+      <button class="chip" data-n="o livrare de mâncare" data-p="60" data-f="once">Livrare · 60</button>
+      <button class="chip" data-n="căști wireless" data-p="250" data-f="once">Căști · 250</button>
+      <button class="chip" data-n="o pereche de adidași" data-p="450" data-f="once">Adidași · 450</button>
+      <button class="chip" data-n="un abonament de streaming" data-p="30" data-f="month">Streaming · 30/lună</button>
+    </div>
+
+    <div class="answer" aria-live="polite">
+      <div class="big" id="big">5<small>h 0 min</small></div>
+      <p class="say" id="say"></p>
+      <div class="punch" id="punch" aria-hidden="true"></div>
+      <div class="legend">1 căsuță = 1 oră de muncă</div>
+      <div class="yearly" id="yearly" hidden></div>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="t2">
+    <h2 id="t2">Vânătoarea de fantome</h2>
+    <p class="lead" style="font-size:14px">Adaugă cheltuielile care se repetă și pe care nu le mai observi: abonamente, gustări, pachete din jocuri. Vezi câte ore pe lună și pe an îți iau.</p>
+    <div class="tablebox">
+      <table>
+        <thead><tr><th>Fantomă</th><th class="num">Lei</th><th>Frecvență</th><th class="num">Ore / lună</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p class="empty" id="empty" hidden>Nicio fantomă încă. Adaugă prima mai jos.</p>
+    <form class="addrow" id="addform" autocomplete="off">
+      <label class="name" for="gname">Ce este
+        <input id="gname" type="text" placeholder="ex.: pachet de gustări" required>
+      </label>
+      <label for="gprice">Lei
+        <input id="gprice" type="number" min="1" step="1" placeholder="15" required>
+      </label>
+      <label for="gfreq">Cât de des
+        <select id="gfreq">
+          <option value="week">săptămânal</option>
+          <option value="month">lunar</option>
+          <option value="day">zilnic (școală)</option>
+        </select>
+      </label>
+      <button class="btn" type="submit">Adaugă</button>
+    </form>
+    <div class="totals">
+      <div class="tot"><span class="k">Pe lună</span><span class="v" id="tm">0 h</span><span class="s" id="tml">0 lei</span></div>
+      <div class="tot"><span class="k">Pe an</span><span class="v" id="ty">0 h</span><span class="s" id="tyl">0 lei</span></div>
+    </div>
+  </section>
+
+  <footer>Câștigul pe oră e o estimare pentru un job de elev. Schimbă-l cu valoarea ta. Datele rămân doar în browserul tău.</footer>
+</div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const F = {once:0, day:21.7, week:4.33, month:1};       // de câte ori pe lună (zile de școală ≈ 21,7)
+  const FLABEL = {day:"zilnic", week:"săptămânal", month:"lunar"};
+  const fmtLei = n => Math.round(n).toLocaleString("ro-RO") + " lei";
+  function hm(h){ let H=Math.floor(h), M=Math.round((h-H)*60); if(M===60){H++;M=0;} return [H,M]; }
+  function hShort(h){ return (h>=10? Math.round(h) : (Math.round(h*10)/10)).toLocaleString("ro-RO") + " h"; }
+  function wage(){ const w=parseFloat($("wage").value); return w>0? w : 17; }
+
+  function calc(){
+    const p = Math.max(0, parseFloat($("price").value)||0), w = wage(), f=$("freq").value;
+    const item = ($("item").value||"asta").trim();
+    const h = p/w, [H,M] = hm(h);
+    $("big").innerHTML = H + "<small>h " + M + " min</small>";
+    const shifts = h/4;
+    let s = "Pentru <b>" + item + "</b> muncești <b>" + H + " ore și " + M + " minute</b>";
+    s += shifts>=1 ? ", adică " + (Math.round(shifts*10)/10).toLocaleString("ro-RO") + " ture de 4 ore." : ".";
+    $("say").innerHTML = s;
+    // căsuțe
+    const box=$("punch"); box.innerHTML="";
+    const max=40, full=Math.floor(h), part=h-full, shown=Math.min(Math.ceil(h),max);
+    for(let i=0;i<shown;i++){
+      const d=document.createElement("div"); d.className="slot";
+      const fill=document.createElement("i");
+      const frac = i<full ? 1 : part;
+      fill.style.transform="scaleY("+frac+")";
+      d.appendChild(fill); box.appendChild(d);
+    }
+    if(Math.ceil(h)>max){ const m=document.createElement("span"); m.className="more"; m.textContent="+"+(Math.ceil(h)-max)+" ore"; box.appendChild(m); }
+    // anual
+    const y=$("yearly");
+    if(f==="once"){ y.hidden=true; }
+    else{
+      const perMonth=p*F[f], perYear=perMonth*12, hy=perYear/w;
+      y.hidden=false;
+      y.innerHTML="Plătit "+(f==="week"?"în fiecare săptămână":"în fiecare lună")+", ajunge la <b>"+fmtLei(perYear)+" pe an</b>, adică <b>"+Math.round(hy).toLocaleString("ro-RO")+" ore de muncă</b> (≈ "+(Math.round(hy/8*10)/10).toLocaleString("ro-RO")+" zile întregi de 8 ore).";
+    }
+  }
+
+  // listă fantome
+  const KEY="faraFantome.v1";
+  const SAMPLE=[{n:"Abonament streaming",p:30,f:"month",ex:true},{n:"Pachet în joc",p:25,f:"week",ex:true},{n:"Snack de la automat",p:6,f:"day",ex:true}];
+  let list;
+  try{ const raw=localStorage.getItem(KEY); list = raw? JSON.parse(raw) : SAMPLE.slice(); }catch(e){ list=SAMPLE.slice(); }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(list)); }catch(e){} }
+  function render(){
+    const tb=$("rows"); tb.innerHTML=""; const w=wage(); let lei=0;
+    list.forEach((g,i)=>{
+      const m=g.p*F[g.f]; lei+=m;
+      const tr=document.createElement("tr");
+      const td1=document.createElement("td"); td1.textContent=g.n;
+      if(g.ex){ const t=document.createElement("span"); t.className="tag"; t.textContent="exemplu"; td1.appendChild(t); }
+      const td2=document.createElement("td"); td2.className="num"; td2.textContent=g.p;
+      const td3=document.createElement("td"); td3.textContent=FLABEL[g.f];
+      const td4=document.createElement("td"); td4.className="num"; td4.textContent=hShort(m/w);
+      const td5=document.createElement("td"); const b=document.createElement("button"); b.className="del"; b.setAttribute("aria-label","Șterge "+g.n); b.textContent="×";
+      b.addEventListener("click",()=>{ list.splice(i,1); save(); render(); }); td5.appendChild(b);
+      tr.append(td1,td2,td3,td4,td5); tb.appendChild(tr);
+    });
+    $("empty").hidden = list.length>0;
+    $("tm").textContent=hShort(lei/w); $("tml").textContent=fmtLei(lei);
+    $("ty").textContent=hShort(lei*12/w); $("tyl").textContent=fmtLei(lei*12);
+  }
+  $("addform").addEventListener("submit",e=>{
+    e.preventDefault();
+    const n=$("gname").value.trim(), p=parseFloat($("gprice").value);
+    if(!n||!(p>0)) return;
+    list.push({n:n,p:p,f:$("gfreq").value}); save(); render();
+    $("gname").value=""; $("gprice").value=""; $("gname").focus();
+  });
+
+  ["price","wage","freq","item"].forEach(id=>$(id).addEventListener("input",()=>{calc(); if(id==="wage") render();}));
+  document.querySelectorAll(".chip").forEach(c=>c.addEventListener("click",()=>{
+    $("item").value=c.dataset.n; $("price").value=c.dataset.p; $("freq").value=c.dataset.f; calc();
+  }));
+  calc(); render();
+})();
+</script>
+
+</body>
+</html>
